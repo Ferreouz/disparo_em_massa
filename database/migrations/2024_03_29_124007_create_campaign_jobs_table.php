@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignId('campaign_id')->constrained();
 
             $table->timestamp('start_at')->default(new Expression('(NOW())'));;
-            $table->json('contacts_processed')->default(new Expression('(JSON_ARRAY())'));
+            $table->json('contacts_processed')->nullable();
 
             $table->enum('status', ['scheduled', 'running', 'stopping', 'finished'])->default('scheduled');
             $table->enum('finished_reason', ['stopped', 'completed', 'failed'])->nullable();
