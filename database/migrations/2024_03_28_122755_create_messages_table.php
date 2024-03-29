@@ -11,15 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('messages', function (Blueprint $table) {
+        Schema::create('message_lists', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('user_id')->constrained();
             $table->foreignId('number_id')->constrained();
 
-            $table->string('name', length: 50);
-            $table->integer('order');
-            $table->text('text')->nullable();
-            $table->string('media_url')->nullable();
-            
+            $table->string('name', length: 64);
+            $table->json('messages');//[{text?, mediaUrl?, order: 0}]
+
             $table->timestamps();
         });
     }
@@ -29,6 +28,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('messages');
+        Schema::dropIfExists('message_lists');
     }
 };

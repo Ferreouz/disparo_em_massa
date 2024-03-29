@@ -2,19 +2,18 @@
 
 namespace App\Models;
 
-use App\Models\Link;
+use App\Models\Campaign;
 use App\Models\Scopes\UserScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Attributes\ScopedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 #[ScopedBy([UserScope::class])]
-class Contact extends Model
+class MessageList extends Model
 {
     use HasFactory;
-    
+
     /**
      * Scope a query to only include records of certain number
      */
@@ -23,12 +22,10 @@ class Contact extends Model
         $query->where('number_id', $number_id);
     }
     
-    public function contacts(): BelongsToMany {
-        return $this->belongsToMany(ContactList::class, 'contact_contact_lists', 'contact_id', 'contact_list_id');
+    public function campaigns(): HasMany
+    {
+        return $this->hasMany(Campaign::class);
     }
 
-    public function links(): HasMany {
-        return $this->hasMany(Link::class);
-    }
 
 }

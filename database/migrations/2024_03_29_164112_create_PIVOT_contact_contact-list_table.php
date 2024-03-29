@@ -11,14 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('dispatches', function (Blueprint $table) {
+        Schema::create('contact_contact_lists', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('number_id')->constrained();
-
-            $table->json('contacts');
-            $table->boolean('finished');
-
-            $table->timestamps();
+            $table->foreignId('contact_list_id')->constrained();
+            $table->foreignId('contact_id')->constrained();
         });
     }
 
@@ -27,6 +23,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('dispatches');
+        Schema::dropIfExists('contact_contact_lists');
     }
 };

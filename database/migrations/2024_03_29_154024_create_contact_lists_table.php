@@ -11,13 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('dispatch_schedulers', function (Blueprint $table) {
+        Schema::create('contact_lists', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('dispatch_id')->constrained();
+            $table->foreignId('user_id')->constrained();
+            $table->foreignId('number_id')->constrained();
+            //many to many contacts
 
-            $table->time('start');
-            $table->boolean('finished');
-            $table->string('finished_reason');
+            $table->string('name', length: 255);
+            $table->boolean('hasGroup');
 
             $table->timestamps();
         });
@@ -28,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('dispatch_schedulers');
+        Schema::dropIfExists('contact_lists');
     }
 };

@@ -14,9 +14,10 @@ return new class extends Migration
         Schema::create('contacts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('number_id')->constrained();
+            $table->foreignId('user_id')->constrained();
 
-            $table->string('name', length: 50);
-            $table->string('number', length: 50);
+            $table->string('name', length: 255);
+            $table->string('number', length: 65);
             $table->boolean('isGroup');
             $table->timestamps();
         });

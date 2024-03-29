@@ -13,12 +13,15 @@ return new class extends Migration
     {
         Schema::create('links', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('dispatch_message_id')->constrained();//pivot id
+            $table->foreignId('user_id')->constrained();
+            $table->foreignId('campaign_id')->constrained();
+            $table->foreignId('contact_id')->nullable()->constrained();
+            //0|many to many contacts
 
             $table->string('original_link');
             $table->string('path');
             $table->integer('click_count');
-            $table->boolean('unique_for_contacts');
+
 
             $table->timestamps();
         });

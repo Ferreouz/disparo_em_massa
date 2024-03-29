@@ -11,15 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('numbers', function (Blueprint $table) {
+        Schema::create('campaigns', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained();
+            $table->foreignId('number_id')->constrained();
+            $table->foreignId('contact_list')->constrained();
+            $table->foreignId('message_list')->constrained();
 
-            $table->enum('type', ['evolution', 'meta']);
-            $table->string('number', length: 65);
-            $table->string('instance');
-            $table->string('token');
-            $table->boolean('connected');
+            $table->string('frequency')->nullable();
+            $table->boolean('unique_contact_link')->default(false);
+
             $table->timestamps();
         });
     }
@@ -29,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('numbers');
+        Schema::dropIfExists('campaigns');
     }
 };
