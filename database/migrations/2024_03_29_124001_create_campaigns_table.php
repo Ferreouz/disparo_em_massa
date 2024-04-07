@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignId('contact_list')->constrained();
             $table->foreignId('message_list')->constrained();
 
-            $table->string('frequency')->nullable();
+            $table->string('cron')->nullable();
             $table->boolean('unique_contact_link')->default(false);
 
             $table->timestamps();

@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class MessageList extends Model
 {
     use HasFactory;
+    protected $fillable = ['user_id', 'number_id', 'name', 'messages'];
 
     /**
      * Scope a query to only include records of certain number

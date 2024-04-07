@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class ContactList extends Model
 {
     use HasFactory;
-
     /**
     * Scope a query to only include records of certain number
     */
@@ -21,7 +20,9 @@ class ContactList extends Model
         $query->where('number_id', $number_id);
     }
 
-    public function contacts(): BelongsToMany {
-        return $this->belongsToMany(Contact::class, 'contact_contact_lists', 'contact_list_id', 'contact_id');
+    public function contacts(): BelongsToMany 
+    {
+        return $this->belongsToMany(Contact::class, 'contact_contact_lists', 'contact_list_id', 'contact_id')->withoutGlobalScopes();
     }
+
 }

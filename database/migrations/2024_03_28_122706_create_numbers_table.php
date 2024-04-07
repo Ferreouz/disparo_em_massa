@@ -15,11 +15,12 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained();
 
+            $table->string('name');
             $table->enum('type', ['evolution', 'meta']);
-            $table->string('number', length: 65);
-            $table->string('instance');
+            $table->string('instance')->unique(true);
             $table->string('token');
-            $table->boolean('connected');
+            $table->string('number', length: 65)->nullable();
+            $table->boolean('connected')->default(0);
             $table->timestamps();
         });
     }
@@ -31,4 +32,5 @@ return new class extends Migration
     {
         Schema::dropIfExists('numbers');
     }
+    
 };
