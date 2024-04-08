@@ -1,6 +1,8 @@
 <?php
 
 namespace App\Worker;
+
+use App\Models\Campaign;
 use App\Models\CampaignJob;
 use App\Models\ContactList;
 use Illuminate\Support\Sleep;
@@ -10,142 +12,148 @@ use Illuminate\Support\Facades\Http;
 
 class CampaignWorker
 {
-   
-    public function __invoke() 
+
+    private $max = 4.5, $min = 5;
+
+    private $contactsProcessed = [];
+
+    public function __construct(private $campaign)
     {
+        Campaign::withoutGlobalScopes()
+            ->where('id', $this->campaign->id)
+            ->update(['running' => true, 'last_runned_at' => now()->toDateTimeString()]);
 
-        $this->notRepetable();
-
-        // $query = DB::table('campaigns')->join('campaign_jobs', 'campaigns.id', '=', 'campaign_jobs.campaign_id', 'full outer')
-        //     ->whereNotNull('cron')
-        //     ->orWhereRaw('campaign_jobs.campaign_id IS NULL AND campaigns.cron is null')
-        //     ->select('campaigns.*', 'campaign_jobs.status')
-        //     ->get();
-    
-     
-    }
-
-    /**
-    * Not repetable campaigns
-    */
-    private function notRepetable()
-    {
-        $campaigns = DB::table('campaigns')
-            ->join('campaign_jobs', 'campaigns.id', '=', 'campaign_jobs.campaign_id', 'full outer')
-            ->join('numbers', 'campaigns.number_id', '=', 'numbers.id', 'left')
-            ->join('contact_lists', 'campaigns.contact_list', '=', 'contact_lists.id', 'left')
-            ->join('message_lists', 'campaigns.message_list', '=', 'message_lists.id', 'left')
-            ->whereRaw('campaign_jobs.campaign_id IS NULL AND campaigns.cron is null and numbers.connected = true')
-            ->whereDate('campaigns.last_runned_at', '<', now()->subMinutes(10))
-            ->select(
-                'campaigns.*', 
-                'numbers.type as number_type', 'numbers.instance as number_instance', 'numbers.token as number_token', 
-                'contact_lists.id as list_id',
-                'message_lists.messages as messages'
-                )->get();
-            
-        #TODO concurrent for each campaign
-        foreach ($campaigns as $campaign) 
+        if($this->campaign->delay)
         {
-            $contactsProcessed = [];            
-
-            $messages = json_decode($campaign->messages);
-            $contacts = $this->getContacts($campaign->list_id);
-            
-            #TODO send message in order
-            $text = $messages[0]->text;
-            $messageType = isset($message[0]->media)? 'media' : 'text'; 
-            
-            #TODO switch number_type
-            foreach ($contacts as $contact) 
-            {
-                Sleep::for(rand(1, 5))->second();
-                $result = "running";
-                switch ($messageType) 
-                {
-                    case 'media':
-                        $result = $this->sendMedia($campaign, $contact->number, $messages[0]->media, $text);
-                        break;
-                    case 'text':
-                        $result = $this->sendText($campaign, $contact->number, $text);
-                        break;
-                    default:
-                        break;
-                }       
-                $contactsProcessed[$contact->id] = $result;
-                var_dump($contactsProcessed);          
-
-            }
-
-            CampaignJob::create([
-                'user_id'            => $campaign->user_id,
-                'campaign_id'        => $campaign->id,
-                'status'             => 'running',
-                'contacts_processed' => json_encode($contactsProcessed)  
-            ]);
+            $this->max = $this->campaign->delay;
+            $this->min = ($this->campaign->delay > 1)
+            ? $this->campaign->delay - 0.5 
+            : 0.8 ;
         }
 
+        $this->run();
+    }
+
+
+    /**
+     * Repetable campaigns
+     */
+    private function run()
+    {
+
+        $messages = json_decode($this->campaign->messages);
+        $contacts = $this->getContacts($this->campaign->list_id);
+
+        #TODO send message in order
+        $text = $messages[0]->text;
+        $messageType = isset($messages[0]->media) ? 'media' : 'text';
+
+        #TODO switch number_type
+        foreach ($contacts as $contact) 
+        {
+          
+            #TODO check if contact didnt receive ($contact->id in $this->contactsProcessed)
+            Sleep::for(($this->min + lcg_value() * (abs($this->max - $this->min))))->second();
+            $result = "running";
+            switch ($messageType) {
+                case 'media':
+                    $result = $this->sendMedia($contact->number, $messages[0]->media, $text);
+                    break;
+                case 'text':
+                    $result = $this->sendText($contact->number, $text);
+                    break;
+                default:
+                    break;
+            }
+            $this->contactsProcessed[$contact->id] = $result;
+        }
 
     }
+
     private function getContacts(int $listId)
     {
         return ContactList::where('id', $listId)->withoutGlobalScopes()->first()?->contacts;
     }
 
-
     /**
      * Send text messages
      */
-    private function sendText($campaign, string $contactNumber, string $text): int|string
+    private function sendText(string $contactNumber, string $text): int|string
     {
         try {
             $response = Http::withHeaders([
-            'apikey' => $campaign->number_token,
-                'Accept'=> 'application/json'
+                'apikey' => $this->campaign->number_token,
+                'Accept' => 'application/json'
             ])
-            ->post(env('EVOLUTION_URL') . "/message/sendText/$campaign->number_instance", [
-                    "number"          =>  $contactNumber,
-                    "options"         => [
-                        "delay"       => rand(1000, 5000),
-                        "presence"    => "composing",
+                ->post(env('EVOLUTION_URL') . "/message/sendText/" . $this->campaign->number_instance, [
+                    "number" => $contactNumber,
+                    "options" => [
+                        "delay" => rand(1000, 5000),
+                        "presence" => "composing",
                         "linkPreview" => false
                     ],
-                    "textMessage"     => [
-                        "text"        => $text . (string) rand(1, 5)
+                    "textMessage" => [
+                        "text" => $text
                     ]
-            ]);
+                ]);
             return $response->status();
-            //code...
         } catch (\Throwable $th) {
             return $th->getMessage();
         }
     }
 
-        /**
+    /**
      * Send text messages
      */
-    private function sendMedia($campaign, string $contactNumber, string $mediaUrl, string $text = ""): int|string
+    private function sendMedia(string $contactNumber, string $mediaUrl, string $text = ""): int|string
     {
-        // dd($campaign, $text, $contactNumber);
-        $response = Http::withHeaders([
-            'apikey' => $campaign->number_token,
-            'Accept'=> 'application/json'
-        ])
-        ->post(env('EVOLUTION_URL') . "/message/sendText/$campaign->number_instance", [
-                "number"          =>  $contactNumber,
-                "options"         => [
-                    "delay"       => rand(1000, 5000),
-                    "presence"    => "composing",
-                    "linkPreview" => false
-                ],
-                "mediaMessage"    => [
-                    "mediatype"   => "image",
-                    "caption"     => $text  ?? "",
-                    "media"       => $mediaUrl
-                ]
-        ]);
-        return $response->status();
+        try {
+            $response = Http::withHeaders([
+                'apikey' => $this->campaign->number_token,
+                'Accept' => 'application/json'
+            ])
+                ->post(env('EVOLUTION_URL') . "/message/sendMedia/" . $this->campaign->number_instance, [
+                    "number" => $contactNumber,
+                    "options" => [
+                        "delay" => rand(1000, 5000),
+                        "presence" => "composing",
+                        "linkPreview" => false
+                    ],
+                    "mediaMessage" => [
+                        "mediatype" => "image",#TODO compute mimetype
+                        "caption" => $text ?? "",
+                        "media" => $mediaUrl
+                    ]
+                ]);
+            return $response->status();
+        } catch (\Throwable $th) {
+            return $th->getMessage();
+        }
+    }
 
+
+    function __destruct()
+    {
+        print "Destroying " . __CLASS__ . "\n With" . (isset($this->error) ? $this->error : 'No errors');
+
+        #TODO check errors
+        // if($this->error)
+        // {
+        //     Campaign::where('id', $this->id)
+        //     ->update(['running' => false]);
+        //     return;
+        // }
+        CampaignJob::create([
+            'user_id' => $this->campaign->user_id,
+            'campaign_id' => $this->campaign->id,
+            'status' => 'finished',
+            #TODO insert finished_reason, finished_at
+            'contacts_processed' => json_encode($this->contactsProcessed)
+        ]);
+
+        Campaign::withoutGlobalScopes()
+            ->where('id', $this->campaign->id)
+            ->update(['running' => false]);
     }
 
 

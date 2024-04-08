@@ -19,7 +19,12 @@ return new class extends Migration
             $table->foreignId('message_list')->constrained();
 
             $table->string('cron')->nullable();
+            $table->boolean('running')->default(0);
+            $table->timestamp('last_runned_at')->default('1945-01-01 14:52:38+00');
+            
+            $table->integer('delay')->nullable();
             $table->boolean('unique_contact_link')->default(false);
+            
 
             $table->timestamps();
         });
