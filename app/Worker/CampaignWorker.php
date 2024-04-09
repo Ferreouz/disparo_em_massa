@@ -16,21 +16,30 @@ class CampaignWorker
     private $max = 4.5, $min = 5;
 
     private $contactsProcessed = [];
+    private $campaignJob;
 
     public function __construct(private $campaign)
     {
         Campaign::withoutGlobalScopes()
             ->where('id', $this->campaign->id)
-            ->update(['running' => true, 'last_runned_at' => now()->toDateTimeString()]);
+            ->update(['running' => true]);
 
         if($this->campaign->delay)
         {
             $this->max = $this->campaign->delay;
             $this->min = ($this->campaign->delay > 1)
-            ? $this->campaign->delay - 0.5 
+            ? $this->campaign->delay - 0.5
             : 0.8 ;
         }
+        $this->campaignJob = new CampaignJob([
+            'user_id' => $this->campaign->user_id,
+            'campaign_id' => $this->campaign->id,
+            'status' => 'running',
+            'contacts_processed' => json_encode($this->contactsProcessed)
+        ]);
+        $this->campaignJob->save();
 
+        Sleep::for((2 + lcg_value() * (abs(6 - 2))))->minutes();
         $this->run();
     }
 
@@ -49,13 +58,13 @@ class CampaignWorker
         $messageType = isset($messages[0]->media) ? 'media' : 'text';
 
         #TODO switch number_type
-        foreach ($contacts as $contact) 
+        foreach ($contacts as $contact)
         {
-          
+
             #TODO check if contact didnt receive ($contact->id in $this->contactsProcessed)
-            Sleep::for(($this->min + lcg_value() * (abs($this->max - $this->min))))->second();
             $result = "running";
-            switch ($messageType) {
+            switch ($messageType)
+            {
                 case 'media':
                     $result = $this->sendMedia($contact->number, $messages[0]->media, $text);
                     break;
@@ -65,7 +74,10 @@ class CampaignWorker
                 default:
                     break;
             }
-            $this->contactsProcessed[$contact->id] = $result;
+            $this->contactsProcessed[$contact->id] = ["status" => $result, "time" => now()->toDateTimeString()];
+            $this->campaignJob->contacts_processed = json_encode($this->contactsProcessed);#TODO update json in eloquent
+            $this->campaignJob->save();
+            Sleep::for(($this->min + lcg_value() * (abs($this->max - $this->min))))->minutes();
         }
 
     }
@@ -143,17 +155,15 @@ class CampaignWorker
         //     ->update(['running' => false]);
         //     return;
         // }
-        CampaignJob::create([
-            'user_id' => $this->campaign->user_id,
-            'campaign_id' => $this->campaign->id,
-            'status' => 'finished',
-            #TODO insert finished_reason, finished_at
-            'contacts_processed' => json_encode($this->contactsProcessed)
-        ]);
+
+        #TODO insert finished_reason, finished_at
+        $this->campaignJob->status = 'finished'; 
+        $this->campaignJob->contacts_processed = json_encode($this->contactsProcessed);
+        $this->campaignJob->save();
 
         Campaign::withoutGlobalScopes()
             ->where('id', $this->campaign->id)
-            ->update(['running' => false]);
+            ->update(['running' => false, 'last_runned_at' => now()->toDateTimeString()]);
     }
 
 
