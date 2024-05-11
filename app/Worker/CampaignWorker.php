@@ -6,7 +6,6 @@ use App\Models\Campaign;
 use App\Models\CampaignJob;
 use App\Models\ContactList;
 use Illuminate\Support\Sleep;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 
@@ -132,7 +131,7 @@ class CampaignWorker
                         "linkPreview" => false
                     ],
                     "mediaMessage" => [
-                        "mediatype" => "image",#TODO compute mimetype
+                        "mediatype" => $this->checkMime($mediaUrl), 
                         "caption" => $text ?? "",
                         "media" => $mediaUrl
                     ]
@@ -143,6 +142,12 @@ class CampaignWorker
         }
     }
 
+    private function checkMime(string $mediaUrl)
+    {
+        $extension = substr($mediaUrl, -4);
+        return str_contains($extension, ".mp4") || str_contains($extension, ".mkv") || str_contains($extension, ".avi")
+                ? "video" : "image";
+    }
 
     function __destruct()
     {

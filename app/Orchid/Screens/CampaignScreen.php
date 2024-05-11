@@ -4,11 +4,13 @@ namespace App\Orchid\Screens;
 
 use App\Models\Number;
 use App\Models\Campaign;
+use Orchid\Attachment\Models\Attachment;
 use Orchid\Screen\Screen;
 use App\Models\ContactList;
 use App\Models\MessageList;
 use Illuminate\Http\Request;
 use Orchid\Screen\Fields\Select;
+use Orchid\Screen\Fields\Upload;
 use Orchid\Screen\Fields\Picture;
 use Orchid\Screen\Fields\CheckBox;
 use Orchid\Screen\Fields\TextArea;
@@ -108,11 +110,20 @@ class CampaignScreen extends Screen
             Layout::tabs([
                 'Simples' => [
                     Layout::rows([
-                        Picture::make('simple.image')->storage('public')
-                        ->formnovalidate()
+                        // Picture::make('simple.image')->storage('public')
+                        //     ->formnovalidate()
+                        //     ->maxFiles(1)
+                        //     ->title('IMAGEM')
+                        //     ->help('Selecione a imagem da mensagem'),
+
+                        Upload::make('simple.image')
+                            ->storage('public')
                             ->maxFiles(1)
-                            ->title('IMAGEM')
-                            ->help('Selecione a imagem da mensagem'),
+                            ->formnovalidate()
+                            ->title('IMAGEM/VIDEO')
+                            ->help('Selecione a imagem ou video da mensagem')
+                            ->acceptedFiles('image/*,video/x-msvideo,video/x-matroska,video/mp4'),
+                            
                         TextArea::make('simple.text')
                             ->title('TEXTO')
                             ->placeholder('Digite aqui')
@@ -121,8 +132,8 @@ class CampaignScreen extends Screen
                         $selectNumbers,
                         $selectLists,
                         CheckBox::make('simple.everyday')
-                                ->placeholder('Repetir todo dia?')
-                                ->help('Todo dia no mesmo horário'),
+                            ->placeholder('Repetir todo dia?')
+                            ->help('Todo dia no mesmo horário'),
                         Select::make('simple.delay')
                             ->options([
                                 5 => '5+ min (melhor)',
@@ -135,7 +146,6 @@ class CampaignScreen extends Screen
                 ],
                 'Avançado' => [
                     Layout::rows([
-                   
                         TextArea::make('task.text')
                             ->title('TEXTO')
                             ->placeholder('Digite aqui')
@@ -169,6 +179,12 @@ class CampaignScreen extends Screen
         
     }
 
+    private function getMediaUrl($imageId) {
+        $attachment = Attachment::where('id', $imageId)->first(['name', 'extension', 'path']);
+        $url = env('APP_URL') . '/storage/' .  
+        $attachment->path . $attachment->name . '.' . $attachment->extension;
+        return $url;
+    }
     private function createSimple(array $input)
     {
         $user_id = auth()->user()->id;
@@ -177,8 +193,7 @@ class CampaignScreen extends Screen
         [
             'text'  => (array_key_exists('text', $input) && $input['text'])   ? $input['text'] : null,
             'order' => 0,
-            # TODO remover server path
-            'media' => (array_key_exists('image', $input) && $input['image']) ? $input['image'] : null,
+            'media' => (array_key_exists('image', $input) && $input['image']) ? $this->getMediaUrl($input['image']) : null,
         ];
         array_filter($json, fn($value) => !is_null($value) );
         $message = MessageList::create([
@@ -193,7 +208,7 @@ class CampaignScreen extends Screen
             'number_id'    => $number_id,
             'contact_list' => $input['contact_list'],
             'message_list' => $message->id,
-            'cron'         =>array_key_exists('everyday', $input) && $input['everyday'] === "on"
+            'cron'         => array_key_exists('everyday', $input) && $input['everyday'] === "on"
                                 ? date('i') . " " .  date('h') . " * * *" #TODO date i está "01"
                                 : null,
             #TODO $campaign->name = "??";
