@@ -15,13 +15,12 @@ class CampaignWorker
     private $max = 4.5, $min = 5;
 
     private $contactsProcessed = [];
-    private $campaignJob;
 
     public function __construct(private $campaign)
     {
         Campaign::withoutGlobalScopes()
             ->where('id', $this->campaign->id)
-            ->update(['running' => true]);
+            ->update(['running' => true, 'last_runned_at' => now()->toDateTimeString()]);
 
         if($this->campaign->delay)
         {
@@ -30,15 +29,7 @@ class CampaignWorker
             ? $this->campaign->delay - 0.5
             : 0.8 ;
         }
-        $this->campaignJob = new CampaignJob([
-            'user_id' => $this->campaign->user_id,
-            'campaign_id' => $this->campaign->id,
-            'status' => 'running',
-            'contacts_processed' => json_encode($this->contactsProcessed)
-        ]);
-        $this->campaignJob->save();
 
-        Sleep::for((2 + lcg_value() * (abs(6 - 2))))->minutes();
         $this->run();
     }
 
@@ -61,9 +52,9 @@ class CampaignWorker
         {
 
             #TODO check if contact didnt receive ($contact->id in $this->contactsProcessed)
+            Sleep::for(($this->min + lcg_value() * (abs($this->max - $this->min))))->second();
             $result = "running";
-            switch ($messageType)
-            {
+            switch ($messageType) {
                 case 'media':
                     $result = $this->sendMedia($contact->number, $messages[0]->media, $text);
                     break;
@@ -73,10 +64,7 @@ class CampaignWorker
                 default:
                     break;
             }
-            $this->contactsProcessed[$contact->id] = ["status" => $result, "time" => now()->toDateTimeString()];
-            $this->campaignJob->contacts_processed = json_encode($this->contactsProcessed);#TODO update json in eloquent
-            $this->campaignJob->save();
-            Sleep::for(($this->min + lcg_value() * (abs($this->max - $this->min))))->minutes();
+            $this->contactsProcessed[$contact->id] = $result;
         }
 
     }
@@ -151,7 +139,7 @@ class CampaignWorker
 
     function __destruct()
     {
-        print "Destroying " . __CLASS__ . "\n With" . (isset($this->error) ? $this->error : 'No errors');
+        // print "Destroying " . __CLASS__ . "\n With" . (isset($this->error) ? $this->error : 'No errors');
 
         #TODO check errors
         // if($this->error)
@@ -160,15 +148,17 @@ class CampaignWorker
         //     ->update(['running' => false]);
         //     return;
         // }
-
-        #TODO insert finished_reason, finished_at
-        $this->campaignJob->status = 'finished'; 
-        $this->campaignJob->contacts_processed = json_encode($this->contactsProcessed);
-        $this->campaignJob->save();
+        CampaignJob::create([
+            'user_id' => $this->campaign->user_id,
+            'campaign_id' => $this->campaign->id,
+            'status' => 'finished',
+            #TODO insert finished_reason, finished_at
+            'contacts_processed' => json_encode($this->contactsProcessed)
+        ]);
 
         Campaign::withoutGlobalScopes()
             ->where('id', $this->campaign->id)
-            ->update(['running' => false, 'last_runned_at' => now()->toDateTimeString()]);
+            ->update(['running' => false]);
     }
 
 
